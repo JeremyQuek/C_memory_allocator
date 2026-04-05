@@ -10,29 +10,29 @@
 #include <string.h>
 #include <stdbool.h>
 
-typedef struct malloc_block{
+typedef struct mem_block{
   size_t size_bytes;
   bool used;
-  struct malloc_block *next;
-  struct malloc_block *prev;
+  struct mem_block *next;
+  struct mem_block *prev;
 
   char data[];
-} malloc_block;
+} mem_block;
 
 typedef struct {
-  malloc_block *head;
-  malloc_block *tail;
+  mem_block *head;
+  mem_block *tail;
   size_t num_blocks;
 } linked_list;
 
-size_t MIN_BLOCK_SIZE = sizeof(malloc_block) + 8;
+size_t MIN_BLOCK_SIZE = sizeof(mem_block) + 8;
 linked_list free_list;
 linked_list malloc_list;
 
 
-void list_remove(malloc_block* block, linked_list *ll) {
-  malloc_block* prev_block = block->prev;
-  malloc_block* next_block = block->next;
+void list_remove(mem_block* block, linked_list *ll) {
+  mem_block* prev_block = block->prev;
+  mem_block* next_block = block->next;
   if (prev_block) prev_block->next = next_block;
   if (next_block) next_block->prev = prev_block;
 
@@ -50,7 +50,7 @@ void list_remove(malloc_block* block, linked_list *ll) {
   ll->num_blocks--;
 }
 
-void list_push_back(malloc_block* block, linked_list *ll) {
+void list_push_back(mem_block* block, linked_list *ll) {
   if (ll->num_blocks==0) {
     ll->head = block;
     ll->tail = block;
@@ -63,16 +63,16 @@ void list_push_back(malloc_block* block, linked_list *ll) {
   ll->num_blocks++;
 }
 
-void list_sorted_insert(malloc_block* block, linked_list *ll) {
+void list_sorted_insert(mem_block* block, linked_list *ll) {
   if (ll->num_blocks==0) {
     list_push_back(block, ll);
     return;
   }
 
-  malloc_block *insert_loc;
+  mem_block *insert_loc;
   for (insert_loc = ll->head; insert_loc!=NULL; insert_loc=insert_loc->next) {
     if (insert_loc>block) {
-      malloc_block* prev_block = insert_loc->prev;
+      mem_block* prev_block = insert_loc->prev;
 
       if (prev_block) {
         prev_block->next = block;
@@ -96,19 +96,19 @@ void* mm_malloc(size_t size) {
     return NULL;
   }
 
-  size_t total_size = size + sizeof(malloc_block);
+  size_t total_size = size + sizeof(mem_block);
   void* return_ptr = NULL;
 
   // Case 1: Free list
   if (free_list.num_blocks!=0) {
-    malloc_block *free_block;
+    mem_block *free_block;
     for (free_block = free_list.head; free_block!=NULL; free_block=free_block->next) {
       if (free_block->size_bytes>=total_size) {
         list_remove(free_block, &free_list);
         if (free_block->size_bytes-total_size>MIN_BLOCK_SIZE) {
 
           char* boundary = (char*)free_block + total_size;
-          malloc_block *new_free_block = (malloc_block *) boundary;
+          mem_block *new_free_block = (mem_block *) boundary;
 
           new_free_block->size_bytes= (size_t)((char*)free_block + free_block->size_bytes - boundary);
           new_free_block->used = false;
@@ -132,7 +132,7 @@ void* mm_malloc(size_t size) {
       return NULL;
     }
 
-    malloc_block *new_block = (malloc_block *)pointer;
+    mem_block *new_block = (mem_block *)pointer;
     new_block->size_bytes=total_size;
     new_block->used = true;
     new_block->next = NULL;
@@ -146,7 +146,7 @@ void* mm_malloc(size_t size) {
 
 
 bool undefined_ptr(void*ptr , linked_list* ll) {
-  malloc_block *temp;
+  mem_block *temp;
   for (temp = ll->head; temp!=NULL; temp=temp->next) {
     if ((void*)temp->data == ptr){
       return false;
@@ -164,16 +164,16 @@ void mm_free(void* ptr) {
     return ;
   }
 
-  malloc_block * remove_block = (malloc_block *)((char *)ptr - sizeof(malloc_block));
+  mem_block * remove_block = (mem_block *)((char *)ptr - sizeof(mem_block));
   list_remove(remove_block, &malloc_list);
   list_sorted_insert(remove_block, &free_list);
 
-  malloc_block * cur = remove_block;
+  mem_block * cur = remove_block;
   char* next_vaddr = (char*)cur + cur->size_bytes;
 
   // Merged forward
-  while (cur->next && (malloc_block*)next_vaddr==cur->next) {
-    malloc_block * next_block = cur->next;
+  while (cur->next && (mem_block*)next_vaddr==cur->next) {
+    mem_block * next_block = cur->next;
     list_remove(next_block, &free_list);
     cur->size_bytes+=next_block->size_bytes;
     next_vaddr = (char*)cur + cur->size_bytes;
@@ -181,7 +181,7 @@ void mm_free(void* ptr) {
 
   // Merge backward
   while (cur->prev && (char*)cur->prev + cur->prev->size_bytes == (char*)cur) {
-      malloc_block *prev_block = cur->prev;
+      mem_block *prev_block = cur->prev;
       prev_block->size_bytes += cur->size_bytes;
       list_remove(cur, &free_list);
       cur = prev_block;
@@ -198,8 +198,8 @@ void* mm_realloc(void* ptr, size_t size) {
   void* new_ptr = mm_malloc(size);
   if (new_ptr == NULL) return NULL;
 
-  malloc_block* old_block = (malloc_block*)((char*)ptr - sizeof(malloc_block));
-  size_t old_data_size = old_block->size_bytes - sizeof(malloc_block);
+  mem_block* old_block = (mem_block*)((char*)ptr - sizeof(mem_block));
+  size_t old_data_size = old_block->size_bytes - sizeof(mem_block);
   size_t copy_size = old_data_size < size ? old_data_size : size;
 
   memcpy(new_ptr, ptr, copy_size);
